@@ -1,0 +1,206 @@
+# Flink Data Pipeline Project Rules
+# =====================================
+
+## 🎯 项目概述
+这是一个基于Apache Flink的实时数据管道项目，主要包含：
+- Kafka到Doris的流处理管道
+- MySQL到Doris的批处理/增量同步
+- 完整的监控和告警系统
+
+## 📋 代码规范
+
+### SQL文件规范
+1. **生产环境配置**
+   - 禁用 `SET sql-client.execution.result-mode=TABLEAU;` （仅用于调试）
+   - 必须包含完整的checkpoint配置
+   - 使用固定延迟重启策略: `restart-strategy = fixed-delay`
+   - 设置合理的超时时间和重试次数
+
+2. **字段类型映射**
+   ```
+   MySQL → Flink 类型映射：
+   - bigint → BIGINT
+   - int/tinyint → INT
+   - varchar/text → STRING  
+   - datetime/timestamp → TIMESTAMP(3)
+   - decimal → DECIMAL(10,2)
+   ```
+
+3. **表结构验证**
+   - 在编写SQL前必须验证真实的数据库表结构
+   - 使用 `DESCRIBE table_name` 或脚本获取准确schema
+   - 字段名和类型必须与源表完全匹配
+
+### Python脚本规范
+1. **编码和导入**
+   ```python
+   #!/usr/bin/env python3
+   # -*- coding: utf-8 -*-
+   ```
+
+2. **日志配置**
+   - 必须同时输出到文件和控制台
+   - 使用统一的日志格式: `%(asctime)s - %(levelname)s - %(message)s`
+   - 日志文件存放在项目根目录
+
+3. **异常处理**
+   - 所有外部调用必须包含异常处理
+   - 网络请求设置合理的timeout
+   - 失败时发送告警通知
+
+4. **告警集成**
+   - 统一使用飞书机器人webhook: `https://open.larksuite.com/open-apis/bot/v2/hook/3bb8fac6-6a02-498e-804f-48b1b38a6089`
+   - 成功和失败都要有通知
+   - 告警消息包含时间戳和详细错误信息
+
+## 🗂️ 文件组织规范
+
+### 目录结构
+```
+.
+├── kafka_to_doris_production.sql    # Kafka流处理生产环境
+├── mysql_content_audit_to_doris.sql # MySQL批处理同步
+├── flink_monitor.py                 # Flink作业监控脚本
+├── mysql_incremental_sync.py        # MySQL增量同步调度器
+├── start_monitor.sh                 # 监控启动脚本
+├── test/                           # 测试和开发文件
+└── README.md                       # 项目文档
+```
+
+### 文件命名规范
+- **生产环境SQL**: `{source}_to_{target}_production.sql`
+- **测试SQL**: 放入 `test/` 目录
+- **Python脚本**: 使用下划线命名法
+- **Shell脚本**: 使用下划线命名法，添加执行权限
+
+## 🔧 配置管理
+
+### 环境配置
+1. **MySQL连接**
+   - 生产库: `xme-prod-rds-content.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com:3306`
+   - 用户: `content-ro` / 密码: `k5**^k12o`
+   - 数据库: `content_data_20250114`
+
+2. **Kafka集群**
+   ```
+   b-1.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092
+   b-2.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092  
+   b-3.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092
+   ```
+
+3. **Doris集群**
+   - 生产: `172.31.0.82:8030` / `root` / `JzyZqbx!309`
+   - 测试: `10.10.41.243:8030` / `root` / `doris@123`
+
+### Checkpoint配置
+```sql
+SET 'execution.checkpointing.interval' = '60s';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+SET 'execution.checkpointing.timeout' = '600s';
+SET 'state.backend' = 'filesystem';
+SET 'state.checkpoints.dir' = 'file:///home/ubuntu/work/script/flink/checkpoints';
+```
+
+## 📊 监控规范
+
+### 监控指标
+1. **Flink集群健康状态**
+2. **作业运行状态** (RUNNING/FAILED/CANCELED)
+3. **Kafka消费延迟**
+4. **Doris写入成功率**
+5. **数据同步延迟**
+
+### 告警策略
+- **立即告警**: 作业失败、集群异常
+- **恢复通知**: 自动重启成功
+- **定期报告**: 同步完成状态
+
+### 监控脚本要求
+- 检查间隔: 60秒
+- 最大失败次数: 3次
+- 自动重启能力
+- 完整的日志记录
+
+## 🚀 部署规范
+
+### 生产部署检查清单
+- [ ] SQL文件schema验证完成
+- [ ] 去除调试模式配置
+- [ ] Checkpoint路径配置正确
+- [ ] 告警webhook配置正确
+- [ ] 监控脚本权限设置正确
+- [ ] 日志路径可写
+- [ ] 网络连接测试通过
+
+### 启动命令
+```bash
+# Flink集群
+cd /opt/flink && ./bin/start-cluster.sh
+
+# 流处理作业
+./bin/sql-client.sh -f /home/ubuntu/work/script/kafka_to_doris_production.sql
+
+# 监控脚本
+cd /home/ubuntu/work/script && ./start_monitor.sh start
+
+# 增量同步
+nohup python3 mysql_incremental_sync.py > mysql_sync.log 2>&1 &
+```
+
+## 🐛 故障排查
+
+### 常见问题
+1. **Schema不匹配**: 使用脚本验证真实表结构
+2. **连接失败**: 检查网络和认证信息
+3. **Checkpoint失败**: 检查路径权限和磁盘空间
+4. **内存不足**: 调整TaskManager配置
+
+### 日志位置
+- Flink日志: `/opt/flink/log/`
+- 监控日志: `/home/ubuntu/work/script/flink_monitor.log`
+- 同步日志: `/home/ubuntu/work/script/mysql_sync.log`
+- Checkpoint: `/home/ubuntu/work/script/flink/checkpoints/`
+
+## 📝 文档维护
+
+### README.md要求
+- 每个SQL文件的状态标记 (✅ 可用 / ⚠️ 测试中 / ❌ 废弃)
+- 详细的使用说明和部署步骤
+- 完整的配置参数说明
+- 故障排除指南
+
+### 代码注释
+- SQL文件必须包含用途、状态、注意事项
+- Python脚本必须有类和方法的文档字符串
+- 关键配置项必须有注释说明
+
+## 🔒 安全规范
+
+### 敏感信息
+- 密码使用占位符或环境变量
+- 生产配置不提交到版本控制
+- 日志中不输出敏感信息
+
+### 权限控制
+- 脚本文件设置合适的执行权限
+- 日志文件限制访问权限
+- Checkpoint目录权限控制
+
+## 📈 性能优化
+
+### Flink调优
+- 根据数据量调整并行度
+- 优化缓冲区大小
+- 设置合理的checkpoint间隔
+- 监控资源使用情况
+
+### 数据库优化
+- 使用分区提高查询效率
+- 批量写入优化
+- 连接池配置
+- 索引优化建议
+
+---
+## 🔄 更新记录
+- 2025-05-27: 初始版本，包含Kafka和MySQL同步规范
+- 2025-05-27: 更新content_audit_record表真实schema规范 

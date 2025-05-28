@@ -99,3 +99,6 @@ coverage/
 # 性能测试结果
 *.profraw
 *.profdata 
+
+# kafka
+kafka_2.13-3.4.0/

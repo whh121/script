@@ -1,0 +1,238 @@
+# Flink Kafka to Doris 数据管道项目
+
+## 项目概述
+本项目实现了从AWS MSK (Kafka) 的 `client_cold_start` topic 读取数据并写入 Doris 数据库的实时数据管道。
+
+## 目录结构
+```
+.
+├── kafka_to_doris_production.sql  # Kafka到Doris生产环境SQL（推荐使用）
+├── mysql_content_audit_to_doris.sql # MySQL到Doris同步SQL
+├── flink_monitor.py               # Flink作业监控脚本
+├── mysql_incremental_sync.py      # MySQL增量同步调度脚本
+├── start_monitor.sh               # 监控脚本启动器
+├── test/                          # 测试和开发SQL文件
+│   ├── kafka_to_doris.sql
+│   ├── kafka_to_doris_solution.sql
+│   ├── kafka_to_doris_simple.sql
+│   ├── kafka_to_doris_once.sql
+│   ├── kafka_to_doris_once_backup.sql
+│   ├── msk_to_file.sql
+│   ├── kafka_to_file.sql
+│   ├── datagen_to_doris.sql
+│   └── file_to_doris.sql
+└── README.md                      # 本文档
+```
+
+## 生产环境文件
+
+### kafka_to_doris_production.sql ✅ **Kafka流处理 - 推荐使用**
+- **状态**: 生产可用
+- **功能**: 从Kafka读取client_cold_start数据写入Doris
+- **特点**: 
+  - 包含完整的checkpoint配置
+  - 使用固定延迟重启策略
+  - 优化的Doris连接器配置
+  - 数据去重和错误处理
+- **使用方式**: 
+  ```bash
+  flink-sql-client -f kafka_to_doris_production.sql
+  ```
+
+### mysql_content_audit_to_doris.sql ✅ **MySQL批处理同步**
+- **状态**: 优化版本
+- **功能**: 从MySQL content_audit_record表同步数据到Doris
+- **特点**: 
+  - 支持批量初始化同步
+  - 支持基于update_time的增量同步
+  - 提供两种同步方案（批量/增量）
+  - 适配未开启binlog的MySQL表
+- **使用方式**: 
+  ```bash
+  # 批量同步（取消注释批量INSERT语句）
+  flink-sql-client -f mysql_content_audit_to_doris.sql
+  
+  # 增量同步（配合调度脚本使用）
+  python3 mysql_incremental_sync.py
+  ```
+
+### mysql_incremental_sync.py ✅ **MySQL增量同步调度器**
+- **状态**: 生产可用
+- **功能**: 定时执行MySQL增量数据同步
+- **特点**: 
+  - 每小时自动增量同步
+  - 每日全量检查同步
+  - 自动告警和错误处理
+  - 基于update_time字段的时间窗口同步
+- **使用方式**: 
+  ```bash
+  # 安装依赖
+  pip3 install schedule requests
+  
+  # 启动调度器
+  nohup python3 mysql_incremental_sync.py > mysql_sync.log 2>&1 &
+  ```
+
+## 测试和开发文件
+
+### test/kafka_to_doris_solution.sql ✅ **测试可用**
+- **状态**: 测试验证通过
+- **功能**: 完整的解决方案，包含多个sink用于调试
+- **特点**: 
+  - 包含print表用于调试
+  - 包含文件系统sink用于数据验证
+  - 包含完整的Doris sink配置
+- **用途**: 开发和调试使用
+
+### test/kafka_to_doris.sql ⚠️ **开发中**
+- **状态**: 开发中，包含多个INSERT语句
+- **功能**: 早期版本，包含多种验证方式
+- **特点**: 
+  - 包含本地文件输出用于验证
+  - 包含datagen数据源测试Doris连接
+  - 时间处理逻辑较简单
+- **用途**: 开发参考
+
+### test/kafka_to_doris_simple.sql ❌ **不可用**
+- **状态**: 简化版本，缺少重要配置
+- **问题**: 缺少checkpoint配置和错误处理
+- **用途**: 学习参考
+
+### test/kafka_to_doris_once.sql ❌ **废弃**
+- **状态**: 一次性执行版本，已废弃
+- **问题**: 不适合流处理场景
+- **用途**: 历史版本参考
+
+### test/kafka_to_doris_once_backup.sql ❌ **废弃**
+- **状态**: kafka_to_doris_once.sql的备份版本
+- **问题**: 同上
+- **用途**: 历史版本参考
+
+### test/msk_to_file.sql ✅ **测试可用**
+- **状态**: 可用于测试MSK连接
+- **功能**: 将MSK数据写入本地文件
+- **用途**: 验证Kafka连接和数据格式
+
+### test/kafka_to_file.sql ✅ **测试可用**
+- **状态**: 可用于本地测试
+- **功能**: 将Kafka数据写入本地文件
+- **用途**: 本地环境测试
+
+### test/datagen_to_doris.sql ✅ **测试可用**
+- **状态**: 可用于测试Doris连接
+- **功能**: 使用datagen生成测试数据写入Doris
+- **用途**: 验证Doris连接和写入性能
+
+### test/file_to_doris.sql ⚠️ **待验证**
+- **状态**: 待验证
+- **功能**: 从文件读取数据写入Doris
+- **用途**: 批处理场景测试
+
+## 监控脚本
+
+### flink_monitor.py ✅ **生产可用**
+- **功能**: 
+  - 监控Flink集群健康状态
+  - 检查Kafka to Doris作业状态
+  - 自动重启失败的作业
+  - 发送告警到飞书机器人
+- **配置**: 
+  ```python
+  # 主要配置项
+  flink_rest_url = "http://localhost:8081"
+  webhook_url = "https://open.larksuite.com/open-apis/bot/v2/hook/3bb8fac6-6a02-498e-804f-48b1b38a6089"
+  flink_sql_path = "/home/ubuntu/work/script/kafka_to_doris_production.sql"
+  check_interval = 60  # 检查间隔（秒）
+  ```
+- **使用方式**: 
+  ```bash
+  # 安装依赖
+  pip3 install requests
+  
+  # 后台运行监控
+  nohup python3 flink_monitor.py > monitor.log 2>&1 &
+  
+  # 或使用systemd服务
+  sudo systemctl enable flink-monitor
+  sudo systemctl start flink-monitor
+  ```
+
+## 系统要求
+
+### Kafka配置
+- **集群地址**: 
+  - b-1.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092
+  - b-2.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092
+  - b-3.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092
+- **Topic**: client_cold_start
+- **数据格式**: JSON
+
+### Doris配置
+- **地址**: 172.31.0.82:8030 (FE节点)
+- **数据库**: xme_dw_ods
+- **表**: xme_ods_user_kafka_client_cold_start_di
+- **认证**: root / JzyZqbx!309
+
+### 数据结构
+```json
+{
+  "uid": 123456,
+  "platformType": "iOS",
+  "userIP": "192.168.1.1",
+  "version": "1.0.0",
+  "deviceId": "device123",
+  "timestamp": "1640995200000"
+}
+```
+
+## 部署步骤
+
+1. **启动Flink集群**
+   ```bash
+   cd /opt/flink
+   ./bin/start-cluster.sh
+   ```
+
+2. **提交生产作业**
+   ```bash
+   ./bin/sql-client.sh -f /home/ubuntu/work/script/kafka_to_doris_production.sql
+   ```
+
+3. **启动监控脚本**
+   ```bash
+   cd /home/ubuntu/work/script
+   nohup python3 flink_monitor.py > monitor.log 2>&1 &
+   ```
+
+4. **验证作业运行**
+   ```bash
+   # 检查Flink Web UI
+   curl http://localhost:8081/jobs
+   
+   # 检查日志
+   tail -f monitor.log
+   ```
+
+## 故障排除
+
+### 常见问题
+1. **Kafka连接失败**: 检查网络连接和安全组配置
+2. **Doris写入失败**: 检查Doris服务状态和表结构
+3. **Checkpoint失败**: 检查存储路径权限和磁盘空间
+4. **内存不足**: 调整Flink TaskManager内存配置
+
+### 日志位置
+- **Flink日志**: `/opt/flink/log/`
+- **监控日志**: `/home/ubuntu/work/script/flink_monitor.log`
+- **Checkpoint**: `/home/ubuntu/work/script/flink/checkpoints/`
+
+### 联系方式
+- **告警通知**: 飞书机器人 (自动推送)
+- **手动检查**: Flink Web UI (http://localhost:8081)
+
+## 性能调优建议
+
+1. **增加并行度**: 根据Kafka分区数调整
+2. **调整缓存大小**: 优化Doris写入性能
+3. **设置合适的checkpoint间隔**: 平衡性能和容错
+4. **监控资源使用**: 及时扩容TaskManager 

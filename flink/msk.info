@@ -1,0 +1,65 @@
+kafka地址: b-1.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092,b-2.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092,b-3.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092
+topic: client_cold_start
+数据格式：{"uid":17121142632274,"platformType":"IOS","userIP":"125.33.252.246","version":"1.2.2","deviceId":"1CCD606F-2082-4B0E-B01D-CF8EB07F72B0","timestamp":"1746758378407"}
+认证: 未经身份验证的访问
+加密: 在客户端和代理之间, 纯文本
+
+doris地址:
+mysql -h 172.31.0.82 -P 9030  -u root -p JzyZqbx!309 xme_dw_ods
+
+doris建表语句:
+CREATE TABLE xme_dw_ods.xme_ods_user_kafka_client_cold_start_di (
+    `partition_day` date NOT NULL,
+    uid BIGINT,
+    platformType VARCHAR(50),
+    userIP VARCHAR(50),
+    version VARCHAR(50),
+    deviceId VARCHAR(100),
+    event_time DATETIME
+)
+ENGINE=OLAP
+DUPLICATE KEY(`partition_day`)
+PARTITION BY RANGE(`partition_day`) (
+    PARTITION p20250519 VALUES [("2025-05-19"), ("2025-05-20"))
+)
+DISTRIBUTED BY RANDOM
+PROPERTIES (
+    -- 副本分布策略, 小于<= BE数
+  "replication_allocation" = "tag.location.default: 3", 
+  -- 最小写入副本数
+  "min_load_replica_num" = "-1",
+  -- 目标集群中创建源集群同步范围中表的副本表
+  "is_being_synced" = "false",
+  -- 存储介质 ssd
+  -- "storage_medium" = "ssd",
+  -- 使用第二代列式存储格式，支持更高效的压缩和编码
+  "storage_format" = "V2",
+  -- 倒排索引存储格式为 V1，用于加速文本字段的检索（如 LIKE 查询）
+  "inverted_index_storage_format" = "V1",
+  -- 启用轻量级 Schema 变更，允许快速添加列（无需重写数据文件）
+  "light_schema_change" = "true",
+  -- 启用自动压缩，合并小文件以减少查询时的 I/O 开销
+  "disable_auto_compaction" = "false",
+  -- 允许单副本 compaction
+  "enable_single_replica_compaction" = "false",
+  -- 组提交时间间隔为 10 秒，将短时间内的小写入合并为批量提交，提高吞吐量
+  "group_commit_interval_ms" = "10000",
+  -- 组提交数据量阈值为 128MB，达到该值立即提交（即使未到时间间隔）。
+  "group_commit_data_bytes" = "134217728",
+  -- 写时合并默认关闭，用户可以通过添加下面的 property 来开启, unique 模式生效
+  -- "enable_unique_key_merge_on_write" = "true", 
+  -- 动态分区调度的单位。可指定为 HOUR、DAY、WEEK、MONTH、YEAR。分别表示按小时、按天、按星期、按月、按年进行分区创建或删除。
+  "dynamic_partition.time_unit" = "DAY",
+  -- 动态分区的起始偏移，为负数。根据 time_unit 属性的不同，以当天（星期/月）为基准，分区范围在此偏移之前的分区将会被删除（TTL）。如果不填写，则默认为 -2147483648，即不删除历史分区。
+  "dynamic_partition.create_history_partition" = "true",
+  "dynamic_partition.start" = "-90",
+  -- 动态分区的结束偏移，为正数。根据 time_unit 属性的不同，以当天（星期/月）为基准，提前创建对应范围的分区。
+   "dynamic_partition.end" = "3",
+  -- 动态创建的分区名前缀（必选）。
+  "dynamic_partition.prefix" = "p",
+  -- 动态创建的分区所对应的分桶数量。
+  "dynamic_partition.buckets" = "10", 
+  "dynamic_partition.enable" = "true", 
+  -- 动态创建的分区所对应的副本数量，如果不填写，则默认为该表创建时指定的副本数量 3, 小于<= BE数
+  "dynamic_partition.replication_num" = "3"
+); 
