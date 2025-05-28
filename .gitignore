@@ -1,0 +1,101 @@
+# 日志文件
+*.log
+log/*.log
+log/cron_*.log
+log/monitor_*.log
+log/alert_state.txt
+log/last_success.txt
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE/编辑器文件
+.vscode/
+.idea/
+*.sublime-*
+
+# 配置文件中的敏感信息
+*.env
+.env
+.env.local
+.env.production
+config.local.*
+secrets.*
+
+# 数据库连接文件
+*.db
+*.sqlite
+*.sqlite3
+
+# Flink相关
+flink/checkpoints/
+flink/output/
+flink/savepoints/
+flink/tmp/
+flink/logs/
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+
+# 进程ID文件
+*.pid
+
+# 输出文件
+output/
+results/
+reports/
+
+# 缓存文件
+cache/
+.cache/
+
+# 编译文件
+*.class
+*.jar
+target/
+
+# Node.js (如果有前端组件)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python相关 (如果有Python脚本)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 测试覆盖率
+coverage/
+.nyc_output/
+
+# 性能测试结果
+*.profraw
+*.profdata 
