@@ -1,0 +1,229 @@
+# MySQL2Doris 配置示例
+# ========================
+
+# 作业配置示例 - content_audit_record表同步
+content_audit_record_sync:
+  # 生产环境配置
+  prod:
+    job:
+      name: "mysql2doris_content_audit_record_prod"
+      parallelism: 4
+      mode: "stream"
+      description: "内容审核记录实时同步到Doris"
+    
+    checkpoint:
+      interval: "60s"
+      mode: "EXACTLY_ONCE"
+      timeout: "600s"
+      dir: "file://./flink_app/mysql2doris/checkpoints"
+    
+    restart:
+      strategy: "fixed-delay"
+      attempts: 3
+      delay: "30s"
+    
+    source:
+      type: "mysql-cdc"
+      driver: "com.mysql.cj.jdbc.Driver"
+      host: "xme-prod-rds-content.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+      port: 3306
+      database: "content_data_20250114"
+      table: "content_audit_record"
+      username: "content-ro"
+      password: "k5**^k12o"
+      server-id: "5001-5004"
+      scan:
+        startup-mode: "initial"
+      debezium:
+        snapshot.mode: "initial"
+        snapshot.locking.mode: "minimal"
+        decimal.handling.mode: "string"
+        bigint.unsigned.handling.mode: "long"
+    
+    sink:
+      type: "doris"
+      fenodes: "172.31.0.82:8030"
+      database: "xme_dw_ods"
+      table: "xme_ods_content_content_audit_record_di"
+      username: "root"
+      password: "JzyZqbx!309"
+      stream-load:
+        format: "json"
+        properties:
+          format: "json"
+          read_json_by_line: "true"
+          load-mode: "stream_load"
+          batch.size: "1000"
+          batch.interval: "10s"
+          max_retries: "3"
+          strip_outer_array: "true"
+  
+  # 测试环境配置
+  test:
+    job:
+      name: "mysql2doris_content_audit_record_test"
+      parallelism: 2
+      mode: "stream"
+      description: "测试环境内容审核记录同步"
+    
+    checkpoint:
+      interval: "120s"
+      mode: "EXACTLY_ONCE"
+      timeout: "600s"
+      dir: "file://./flink_app/mysql2doris/checkpoints"
+    
+    restart:
+      strategy: "fixed-delay"
+      attempts: 2
+      delay: "60s"
+    
+    source:
+      type: "mysql-cdc"
+      driver: "com.mysql.cj.jdbc.Driver"
+      host: "xme-envtest-rds.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+      port: 3306
+      database: "content_behavior"
+      table: "user_interests"
+      username: "bigdata-user-interests"
+      password: "BId.3DKRF5dDFwfs"
+      server-id: "6001-6002"
+      scan:
+        startup-mode: "latest-offset"
+      debezium:
+        snapshot.mode: "schema_only"
+        snapshot.locking.mode: "none"
+    
+    sink:
+      type: "doris"
+      fenodes: "10.10.41.243:8030"
+      database: "test_flink"
+      table: "content_audit_record_test"
+      username: "root"
+      password: "doris@123"
+      stream-load:
+        format: "json"
+        properties:
+          format: "json"
+          read_json_by_line: "true"
+          batch.size: "500"
+          batch.interval: "15s"
+
+# 另一个作业示例 - user_interests表同步
+user_interests_sync:
+  prod:
+    job:
+      name: "mysql2doris_user_interests_prod"
+      parallelism: 6
+      mode: "stream"
+      description: "用户兴趣数据实时同步"
+    
+    checkpoint:
+      interval: "60s"
+      mode: "EXACTLY_ONCE"
+      timeout: "600s"
+      dir: "file://./flink_app/mysql2doris/checkpoints"
+    
+    restart:
+      strategy: "fixed-delay"
+      attempts: 3
+      delay: "30s"
+    
+    source:
+      type: "mysql-cdc"
+      driver: "com.mysql.cj.jdbc.Driver"
+      host: "xme-prod-rds-analysis-readonly.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+      port: 3306
+      database: "content_behavior"
+      table: "user_interests"
+      username: "prod-bigdata-user-interests"
+      password: "Dd4.fD3DFDk4.9cc"
+      server-id: "5101-5106"
+      scan:
+        startup-mode: "initial"
+      debezium:
+        snapshot.mode: "initial"
+        snapshot.locking.mode: "minimal"
+        include.schema.changes: "false"
+        tombstones.on.delete: "false"
+    
+    sink:
+      type: "doris"
+      fenodes: "172.31.0.82:8030"
+      database: "xme_dw_ods"
+      table: "xme_ods_user_interests_di"
+      username: "root"
+      password: "JzyZqbx!309"
+      stream-load:
+        format: "json"
+        properties:
+          format: "json"
+          read_json_by_line: "true"
+          load-mode: "stream_load"
+          batch.size: "2000"
+          batch.interval: "5s"
+          columns: "id,user_id,interest_type,interest_value,score,created_at,updated_at"
+
+# 批处理模式示例
+batch_sync_example:
+  prod:
+    job:
+      name: "mysql2doris_batch_sync_prod"
+      parallelism: 4
+      mode: "batch"
+      description: "批处理模式数据同步"
+    
+    source:
+      type: "jdbc"
+      driver: "com.mysql.cj.jdbc.Driver"
+      url: "jdbc:mysql://xme-prod-rds-content.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com:3306/content_data_20250114"
+      username: "content-ro"
+      password: "k5**^k12o"
+      table: "content_audit_record"
+      partition:
+        column: "id"
+        lower: 1
+        upper: 1000000
+        num: 4
+    
+    sink:
+      type: "doris"
+      fenodes: "172.31.0.82:8030"
+      database: "xme_dw_ods"
+      table: "xme_ods_content_content_audit_record_batch"
+      username: "root"
+      password: "JzyZqbx!309"
+      stream-load:
+        format: "json"
+        properties:
+          format: "json"
+          load-mode: "stream_load"
+          batch.size: "5000"
+
+# ===========================================
+# 配置说明
+# ===========================================
+#
+# 作业名称规范:
+# - 格式: {source}2{sink}_{table}_{env}
+# - 示例: mysql2doris_content_audit_record_prod
+#
+# 并行度设置:
+# - 小表(< 10万记录): 2-4
+# - 中表(10万-100万): 4-8
+# - 大表(> 100万): 8-16
+#
+# 检查点配置:
+# - 高频更新表: 30-60s
+# - 低频更新表: 60-300s
+# - 批处理: 可禁用检查点
+#
+# Server ID配置:
+# - 每个环境使用不同的ID范围
+# - prod: 5001-5999
+# - test: 6001-6999
+# - dev: 7001-7999
+#
+# Doris写入优化:
+# - 小批量高频: batch.size=500, interval=5s
+# - 大批量低频: batch.size=5000, interval=30s
+# - 平衡模式: batch.size=1000, interval=10s 

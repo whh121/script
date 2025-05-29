@@ -1,0 +1,81 @@
+# 生产环境配置
+# ================
+# 仅包含环境相关的配置，不包含SQL逻辑
+
+# 全局环境设置
+environment: "prod"
+cluster:
+  name: "flink-prod-cluster"
+  parallelism: 8
+  taskmanager:
+    memory: "4g"
+    slots: 2
+
+# 检查点配置
+checkpoint:
+  interval: "60s"
+  mode: "EXACTLY_ONCE"
+  timeout: "600s"
+  base_dir: "./flink_app"
+
+# 重启策略
+restart:
+  strategy: "fixed-delay"
+  attempts: 3
+  delay: "30s"
+
+# 数据源配置
+sources:
+  mysql:
+    # 通用content数据库连接
+    host: "xme-prod-rds-content.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+    port: 3306
+    username: "content-ro"
+    password: "k5**^k12o"
+    databases:
+      content: "content_data_20250114"
+      behavior: "content_behavior"
+    server_id_range: "5001-5999"
+    
+    # user_interests专用连接配置
+    user_interests:
+      host: "xme-prod-rds-analysis-readonly.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+      port: 3306
+      username: "prod-bigdata-user-interests"
+      password: "Dd4.fD3DFDk4.9cc"
+      database: "content_behavior"
+      server_id_range: "5101-5106"
+    
+  kafka:
+    brokers:
+      - "b-1.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+      - "b-2.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+      - "b-3.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+    consumer:
+      auto_offset_reset: "earliest"
+
+# 数据目标配置
+sinks:
+  doris:
+    fenodes: "172.31.0.82:8030"
+    username: "flink_user"
+    password: "flink@123"
+    databases:
+      ods: "xme_dw_ods"
+      dw: "xme_dw"
+    load_properties:
+      batch_size: "2000"
+      batch_interval: "5s"
+      max_retries: "3"
+
+# 监控配置
+monitoring:
+  webhook_url: "https://open.larksuite.com/open-apis/bot/v2/hook/3bb8fac6-6a02-498e-804f-48b1b38a6089"
+  check_interval: 60
+  max_failures: 3
+  
+# 网络和安全配置
+network:
+  connection_timeout: "30s"
+  read_timeout: "60s"
+  ssl_enabled: false 

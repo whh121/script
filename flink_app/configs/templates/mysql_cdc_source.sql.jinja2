@@ -1,0 +1,44 @@
+{# MySQL CDC源表SQL模板 #}
+{# ====================== #}
+-- MySQL CDC源表定义
+-- 表名: {{ source_table_name }}
+{%- if env.sources.mysql[source_table] %}
+-- 数据库: {{ env.sources.mysql[source_table].database }}
+{%- else %}
+-- 数据库: {{ env.sources.mysql.databases[source_database] }}
+{%- endif %}
+
+CREATE TABLE {{ source_table_name }} (
+{%- for field in schema.source_fields %}
+    {{ field.name }} {{ field.flink_type }}
+    {%- if field.comment %} COMMENT '{{ field.comment }}'{% endif %}
+    {%- if not loop.last %},{% endif %}
+{%- endfor %}
+{%- if schema.primary_keys %},
+    PRIMARY KEY ({{ schema.primary_keys | join(', ') }}) NOT ENFORCED
+{%- endif %}
+) WITH (
+    'connector' = 'mysql-cdc',
+{%- if env.sources.mysql[source_table] %}
+    'hostname' = '{{ env.sources.mysql[source_table].host }}',
+    'port' = '{{ env.sources.mysql[source_table].port }}',
+    'username' = '{{ env.sources.mysql[source_table].username }}',
+    'password' = '{{ env.sources.mysql[source_table].password }}',
+    'database-name' = '{{ env.sources.mysql[source_table].database }}',
+{%- else %}
+    'hostname' = '{{ env.sources.mysql.host }}',
+    'port' = '{{ env.sources.mysql.port }}',
+    'username' = '{{ env.sources.mysql.username }}',
+    'password' = '{{ env.sources.mysql.password }}',
+    'database-name' = '{{ env.sources.mysql.databases[source_database] }}',
+{%- endif %}
+    'table-name' = '{{ source_table }}',
+    'server-id' = '{{ server_id }}',
+    'scan.startup.mode' = '{{ job.dataflow.source.cdc.startup_mode }}',
+    'debezium.snapshot.mode' = '{{ job.dataflow.source.cdc.debezium.snapshot_mode }}',
+    'debezium.snapshot.locking.mode' = '{{ job.dataflow.source.cdc.debezium.snapshot_locking_mode }}',
+    'debezium.decimal.handling.mode' = '{{ job.dataflow.source.cdc.debezium.decimal_handling_mode }}',
+    'debezium.bigint.unsigned.handling.mode' = '{{ job.dataflow.source.cdc.debezium.bigint_unsigned_handling_mode }}',
+    'debezium.include.schema.changes' = '{{ "true" if job.dataflow.source.cdc.debezium.include_schema_changes else "false" }}',
+    'debezium.tombstones.on.delete' = '{{ "true" if job.dataflow.source.cdc.debezium.tombstones_on_delete else "false" }}'
+); 

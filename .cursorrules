@@ -307,4 +307,192 @@ mysql -h [host] -P 9030 -u [user] -p
 - **2025-05-28**: 重构为flink_app工程，支持多项目管理
 - **2025-05-28**: 实现项目独立检查点管理
 - **2025-05-27**: 完善kafka2doris和mysql2doris项目规范
-- **2025-05-27**: 更新监控和告警系统规范 
+- **2025-05-27**: 更新监控和告警系统规范
+
+# Flink分离模板系统开发规则
+# ================================
+
+## 🎯 项目概述
+这是基于Jinja2的Flink分离模板系统，实现配置、逻辑、模板的完全分离。
+核心特性：环境差异化管理、真实Schema检测、高度可扩展的模板引擎。
+
+## 📋 模板开发规范
+
+### 1. SQL格式规范
+- **字段格式**: 每个字段必须单独一行，提高可读性和维护性
+- **Schema一致性**: source和sink的column必须与真实数据库表schema保持完全一致
+- **分区字段**: sink表必须包含partition_day字段，从source表的created_at提取，格式"yyyy-MM-dd"
+
+```sql
+-- ✅ 正确格式 - 字段分行
+CREATE TABLE source_user_interests (
+    id BIGINT COMMENT '主键ID',
+    user_id BIGINT COMMENT '用户ID',
+    interest_type STRING COMMENT '兴趣类型',
+    created_at TIMESTAMP(3) COMMENT '创建时间'
+);
+
+-- ❌ 错误格式 - 字段在一行
+CREATE TABLE source_user_interests (    id BIGINT COMMENT '主键ID',    user_id BIGINT COMMENT '用户ID');
+```
+
+### 2. 模板结构规范
+```
+flink_app/configs/
+├── environments/          # 环境配置（prod/test/dev）
+├── jobs/                 # 作业逻辑定义
+├── templates/            # Jinja2 SQL模板
+├── template_generator.py # 模板生成器
+└── schema_detector.py    # Schema检测器
+```
+
+### 3. 环境配置规范
+- **完全分离**: 环境配置、作业逻辑、SQL模板独立管理
+- **特殊表配置**: 支持user_interests等表的独立数据库连接配置
+- **差异化管理**: prod/test/dev环境独立配置文件
+
+```yaml
+# environments/prod.yaml
+sources:
+  mysql:
+    # 通用配置
+    host: "xme-prod-rds-content.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+    
+    # 特殊表配置
+    user_interests:
+      host: "xme-prod-rds-analysis-readonly.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+      username: "prod-bigdata-user-interests"
+      password: "Dd4.fD3DFDk4.9cc"
+      database: "content_behavior"
+```
+
+### 4. Schema检测规范
+- **真实连接**: 优先使用schema_detector.py连接真实数据库获取表结构
+- **降级策略**: 连接失败时使用默认schema，确保生成器不中断
+- **类型映射**: MySQL类型精确映射到Flink类型
+
+```python
+# MySQL → Flink 类型映射
+'bigint' → 'BIGINT'
+'varchar/text' → 'STRING'  
+'datetime/timestamp' → 'TIMESTAMP(3)'
+'decimal' → 'DECIMAL(10,2)'
+```
+
+### 5. Jinja2模板规范
+- **模板继承**: 使用`{% include %}`实现模板复用
+- **条件判断**: 使用`{% if %}`处理环境差异
+- **变量替换**: 使用`{{ variable }}`进行动态替换
+- **循环处理**: 使用`{% for %}`遍历字段列表
+
+```jinja2
+{# 字段生成 - 每个字段分行 #}
+CREATE TABLE {{ source_table_name }} (
+{%- for field in schema.source_fields %}
+    {{ field.name }} {{ field.flink_type }}
+    {%- if field.comment %} COMMENT '{{ field.comment }}'{% endif %}
+    {%- if not loop.last %},{% endif %}
+
+{%- endfor %}
+);
+```
+
+### 6. 分区字段生成规范
+- **目标表**: 必须包含partition_day STRING字段
+- **INSERT语句**: 必须生成DATE_FORMAT(created_at, 'yyyy-MM-dd') AS partition_day
+- **字段位置**: partition_day放在目标表字段列表最后
+
+```sql
+-- Doris目标表
+CREATE TABLE sink_target_table (
+    id BIGINT COMMENT '主键ID',
+    user_id BIGINT COMMENT '用户ID',
+    created_at TIMESTAMP(3) COMMENT '创建时间',
+    partition_day STRING COMMENT '分区日期字段，格式yyyy-MM-dd'
+);
+
+-- INSERT语句
+INSERT INTO sink_target_table
+SELECT 
+    id,
+    user_id,
+    created_at,
+    DATE_FORMAT(created_at, 'yyyy-MM-dd') AS partition_day
+FROM source_table;
+```
+
+## 🔧 开发工具使用
+
+### 模板生成命令
+```bash
+# MySQL CDC到Doris (生产环境)
+python3 template_generator.py \
+  --job mysql2doris \
+  --env prod \
+  --source-table user_interests \
+  --target-table xme_ods_user_rds_user_interests_di \
+  --source-db behavior \
+  --target-db ods
+
+# Kafka到Doris (测试环境)  
+python3 template_generator.py \
+  --job kafka2doris \
+  --env test \
+  --source-topic client_cold_start \
+  --target-table client_cold_start_test
+```
+
+### Schema检测测试
+```bash
+# 测试schema检测器
+python3 schema_detector.py
+```
+
+## 🚀 质量检查清单
+
+### 生成SQL检查
+- [ ] 字段格式：每个字段单独一行
+- [ ] Schema一致性：与真实表结构匹配
+- [ ] 分区字段：包含partition_day且逻辑正确
+- [ ] 配置正确：连接信息、认证信息无误
+- [ ] 模板变量：所有{{}}都已正确替换
+
+### 模板开发检查  
+- [ ] Jinja2语法：条件、循环、包含语法正确
+- [ ] 变量引用：避免undefined变量错误
+- [ ] 字段遍历：使用loop.last正确处理逗号
+- [ ] 注释完整：模板用途和参数说明清晰
+
+## 🐛 常见问题解决
+
+### 1. 字段格式问题
+```jinja2
+{# 确保字段分行显示 #}
+{%- for field in schema.source_fields %}
+    {{ field.name }} {{ field.flink_type }}
+    {%- if field.comment %} COMMENT '{{ field.comment }}'{% endif %}
+    {%- if not loop.last %},{% endif %}
+
+{%- endfor %}
+```
+
+### 2. Schema检测失败
+- 检查网络连接和数据库认证
+- 确保pymysql已安装：`pip3 install pymysql`
+- 验证配置文件中的连接信息
+
+### 3. 模板变量未替换
+- 检查变量名拼写
+- 确认变量在模板上下文中存在
+- 使用{% if variable %}做条件检查
+
+## 📝 文件命名规范
+- 环境配置：`{env}.yaml` (prod.yaml, test.yaml, dev.yaml)
+- 作业定义：`{job_type}.yaml` (mysql2doris.yaml, kafka2doris.yaml)  
+- SQL模板：`{component}.sql.jinja2` (mysql_cdc_source.sql.jinja2)
+- 生成SQL：`{job_name}_{env}.sql` (mysql2doris_user_interests_prod.sql)
+
+## 🔄 更新记录
+- **2025-05-29**: 建立分离模板系统开发规范
+- **2025-05-29**: 完善Schema检测和字段格式要求
+- **2025-05-29**: 标准化partition_day字段生成规则 

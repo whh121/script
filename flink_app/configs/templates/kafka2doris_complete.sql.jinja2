@@ -1,0 +1,76 @@
+{# Kafka2Doris完整作业SQL模板 #}
+{# ============================= #}
+-- =====================================================
+-- Flink作业: {{ job_name }}
+-- 生成时间: {{ current_time }}
+-- 环境: {{ env.environment }}
+-- 源Topic: {{ source_topic }}
+-- 目标表: {{ env.sinks.doris.databases[target_database] }}.{{ target_table }}
+-- =====================================================
+
+{%- if env.debug and env.debug.sql_client_result_mode %}
+-- 调试模式设置
+SET sql-client.execution.result-mode={{ env.debug.sql_client_result_mode }};
+{%- endif %}
+
+-- Flink执行配置
+SET 'parallelism.default' = '{{ env.cluster.parallelism }}';
+
+-- 检查点配置
+SET 'execution.checkpointing.interval' = '{{ env.checkpoint.interval }}';
+SET 'execution.checkpointing.mode' = '{{ env.checkpoint.mode }}';
+SET 'execution.checkpointing.timeout' = '{{ env.checkpoint.timeout }}';
+SET 'state.backend' = 'filesystem';
+SET 'state.checkpoints.dir' = 'file://{{ env.checkpoint.base_dir }}/{{ job_type }}/checkpoints';
+
+-- 重启策略配置
+SET 'restart-strategy' = '{{ env.restart.strategy }}';
+SET 'restart-strategy.fixed-delay.attempts' = '{{ env.restart.attempts }}';
+SET 'restart-strategy.fixed-delay.delay' = '{{ env.restart.delay }}';
+
+-- 性能优化配置
+SET 'table.exec.sink.not-null-enforcer' = 'drop';
+SET 'table.exec.sink.upsert-materialize' = 'none';
+
+-- 网络配置
+SET 'akka.ask.timeout' = '{{ env.network.connection_timeout }}';
+SET 'web.timeout' = '{{ env.network.read_timeout }}';
+
+{% include 'kafka_source.sql.jinja2' %}
+
+{% include 'doris_sink.sql.jinja2' %}
+
+-- 数据同步INSERT语句
+INSERT INTO {{ target_table_name }}
+SELECT 
+{%- if job.dataflow.transform.field_mapping %}
+    {%- for source_field, target_field in job.dataflow.transform.field_mapping.items() %}
+    {{ source_field }} AS {{ target_field }}
+    {%- if not loop.last %},{% endif %}
+    {%- endfor %}
+{%- else %}
+    *
+{%- endif %}
+{%- if job.dataflow.transform.window %}
+FROM (
+    SELECT *
+    FROM TABLE({{ job.dataflow.transform.window }}(
+        TABLE {{ source_table_name }},
+        DESCRIPTOR({{ job.dataflow.source.watermark.timestamp_column }}_ltz),
+        INTERVAL '{{ job.dataflow.transform.window.size }}' {{ job.dataflow.transform.window.unit }}
+    ))
+)
+{%- else %}
+FROM {{ source_table_name }}
+{%- endif %}
+{%- if job.dataflow.transform.filter %}
+WHERE {{ job.dataflow.transform.filter }}
+{%- endif %};
+
+-- 作业监控信息
+-- 作业名称: {{ job_name }}
+-- Topic: {{ source_topic }}
+-- Consumer Group: {{ consumer_group }}
+-- 检查点目录: {{ env.checkpoint.base_dir }}/{{ job_type }}/checkpoints
+-- 监控地址: http://localhost:8081
+-- 告警webhook: {{ env.monitoring.webhook_url }} 

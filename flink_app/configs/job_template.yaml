@@ -1,0 +1,243 @@
+# Flink作业配置模板
+# ===========================================
+# 支持多环境配置和统一的数据源/目标配置
+# 类似SeaTunnel的配置风格
+# ===========================================
+
+# 模板配置说明
+# - 支持多环境: prod/test/dev
+# - 统一的source和sink配置
+# - 自动生成Flink SQL
+# - 类型映射和schema验证
+
+# ===========================================
+# 1. MySQL CDC 到 Doris 配置模板
+# ===========================================
+mysql2doris:
+  # 生产环境配置
+  prod:
+    job:
+      name: "mysql2doris_content_audit_record_prod"
+      parallelism: 4
+      mode: "stream"  # stream | batch
+    
+    checkpoint:
+      interval: "60s"
+      mode: "EXACTLY_ONCE"
+      timeout: "600s"
+      dir: "file://./flink_app/mysql2doris/checkpoints"
+    
+    restart:
+      strategy: "fixed-delay"
+      attempts: 3
+      delay: "30s"
+    
+    source:
+      type: "mysql-cdc"
+      driver: "com.mysql.cj.jdbc.Driver"
+      host: "xme-prod-rds-content.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+      port: 3306
+      database: "content_data_20250114"
+      table: "content_audit_record"
+      username: "content-ro"
+      password: "k5**^k12o"
+      server-id: "5001-5004"
+      scan:
+        startup-mode: "initial"  # initial | earliest-offset | latest-offset
+      debezium:
+        snapshot.mode: "initial"
+        snapshot.locking.mode: "minimal"
+    
+    sink:
+      type: "doris"
+      fenodes: "172.31.0.82:8030"
+      database: "xme_dw_ods"
+      table: "xme_ods_content_content_audit_record_di"
+      username: "root"
+      password: "JzyZqbx!309"
+      stream-load:
+        format: "json"
+        properties:
+          format: "json"
+          read_json_by_line: "true"
+          load-mode: "stream_load"
+          batch.size: "1000"
+          batch.interval: "10s"
+  
+  # 测试环境配置
+  test:
+    job:
+      name: "mysql2doris_content_audit_record_test"
+      parallelism: 2
+      mode: "stream"
+    
+    checkpoint:
+      interval: "60s"
+      mode: "EXACTLY_ONCE"
+      timeout: "600s"
+      dir: "file://./flink_app/mysql2doris/checkpoints"
+    
+    restart:
+      strategy: "fixed-delay"
+      attempts: 3
+      delay: "30s"
+    
+    source:
+      type: "mysql-cdc"
+      driver: "com.mysql.cj.jdbc.Driver"
+      host: "xme-envtest-rds.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+      port: 3306
+      database: "content_behavior"
+      table: "user_interests"
+      username: "bigdata-user-interests"
+      password: "BId.3DKRF5dDFwfs"
+      server-id: "6001-6002"
+      scan:
+        startup-mode: "initial"
+    
+    sink:
+      type: "doris"
+      fenodes: "10.10.41.243:8030"
+      database: "test_flink"
+      table: "user_interests_test"
+      username: "root"
+      password: "doris@123"
+      stream-load:
+        format: "json"
+        properties:
+          format: "json"
+          read_json_by_line: "true"
+          batch.size: "500"
+          batch.interval: "15s"
+
+# ===========================================
+# 2. Kafka 到 Doris 配置模板
+# ===========================================
+kafka2doris:
+  # 生产环境配置
+  prod:
+    job:
+      name: "kafka2doris_client_cold_start_prod"
+      parallelism: 6
+      mode: "stream"
+    
+    checkpoint:
+      interval: "60s"
+      mode: "EXACTLY_ONCE"
+      timeout: "600s"
+      dir: "file://./flink_app/kafka2doris/checkpoints"
+    
+    restart:
+      strategy: "fixed-delay"
+      attempts: 3
+      delay: "30s"
+    
+    source:
+      type: "kafka"
+      brokers: 
+        - "b-1.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+        - "b-2.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+        - "b-3.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+      topic: "client_cold_start"
+      consumer:
+        group-id: "flink_kafka2doris_client_cold_start"
+        startup-mode: "earliest-offset"  # earliest-offset | latest-offset | group-offsets
+        format: "json"
+        json:
+          ignore-parse-errors: true
+          timestamp-format:
+            standard: "ISO-8601"
+    
+    sink:
+      type: "doris"
+      fenodes: "172.31.0.82:8030"
+      database: "xme_dw_ods"
+      table: "xme_ods_user_kafka_client_cold_start_di"
+      username: "root"
+      password: "JzyZqbx!309"
+      stream-load:
+        format: "json"
+        properties:
+          format: "json"
+          read_json_by_line: "true"
+          load-mode: "stream_load"
+          batch.size: "2000"
+          batch.interval: "5s"
+  
+  # 测试环境配置
+  test:
+    job:
+      name: "kafka2doris_client_cold_start_test"
+      parallelism: 2
+      mode: "stream"
+    
+    checkpoint:
+      interval: "120s"
+      mode: "EXACTLY_ONCE"
+      timeout: "600s"
+      dir: "file://./flink_app/kafka2doris/checkpoints"
+    
+    source:
+      type: "kafka"
+      brokers: 
+        - "b-1.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+        - "b-2.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+        - "b-3.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+      topic: "client_cold_start"
+      consumer:
+        group-id: "flink_kafka2doris_client_cold_start_test"
+        startup-mode: "latest-offset"
+        format: "json"
+    
+    sink:
+      type: "doris"
+      fenodes: "10.10.41.243:8030"
+      database: "test_flink"
+      table: "client_cold_start_test"
+      username: "root"
+      password: "doris@123"
+      stream-load:
+        format: "json"
+        properties:
+          format: "json"
+          read_json_by_line: "true"
+          batch.size: "500"
+          batch.interval: "10s"
+
+# ===========================================
+# 3. 通用配置项说明
+# ===========================================
+# 
+# job配置:
+#   - name: 作业名称，用于标识和监控
+#   - parallelism: 并行度，根据数据量和资源调整
+#   - mode: stream(流处理) | batch(批处理)
+#
+# checkpoint配置:
+#   - interval: 检查点间隔
+#   - mode: EXACTLY_ONCE | AT_LEAST_ONCE
+#   - timeout: 检查点超时时间
+#   - dir: 检查点存储目录
+#
+# restart配置:
+#   - strategy: fixed-delay | exponential-backoff | failure-rate
+#   - attempts: 最大重试次数
+#   - delay: 重试延迟
+#
+# source类型支持:
+#   - mysql-cdc: MySQL变更数据捕获
+#   - kafka: Kafka消息队列
+#   - jdbc: JDBC数据库连接
+#
+# sink类型支持:
+#   - doris: Apache Doris数据仓库
+#   - kafka: Kafka消息队列
+#   - print: 控制台输出(调试用)
+#
+# ===========================================
+# 使用方式:
+# 1. 根据业务需求选择合适的模板
+# 2. 修改环境配置(prod/test)
+# 3. 使用config_generator.py生成Flink SQL
+# 4. 运行生成的SQL文件
+# =========================================== 

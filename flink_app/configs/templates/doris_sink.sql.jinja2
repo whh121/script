@@ -1,0 +1,31 @@
+{# Doris目标表SQL模板 #}
+{# ===================== #}
+-- Doris目标表定义
+-- 表名: {{ target_table }}
+-- 数据库: {{ env.sinks.doris.databases[target_database] }}
+
+CREATE TABLE {{ target_table_name }} (
+{%- for field in schema.target_fields %}
+    {{ field.name }} {{ field.flink_type }}
+    {%- if field.comment %} COMMENT '{{ field.comment }}'{% endif %},
+{%- endfor %}
+    partition_day STRING COMMENT '分区日期字段，格式yyyy-MM-dd'
+{%- if schema.primary_keys %},
+    PRIMARY KEY ({{ schema.primary_keys | join(', ') }}) NOT ENFORCED
+{%- endif %}
+) WITH (
+    'connector' = 'doris',
+    'fenodes' = '{{ env.sinks.doris.fenodes }}',
+    'table.identifier' = '{{ env.sinks.doris.databases[target_database] }}.{{ target_table }}',
+    'username' = '{{ env.sinks.doris.username }}',
+    'password' = '{{ env.sinks.doris.password }}',
+    'sink.batch.size' = '{{ env.sinks.doris.load_properties.batch_size }}',
+    'sink.batch.interval' = '{{ env.sinks.doris.load_properties.batch_interval }}',
+    'sink.max-retries' = '{{ env.sinks.doris.load_properties.max_retries }}',
+    'sink.properties.format' = '{{ job.dataflow.sink.properties.format }}',
+    'sink.properties.read_json_by_line' = '{{ job.dataflow.sink.properties.read_json_by_line }}',
+    'sink.properties.load-mode' = '{{ job.dataflow.sink.properties.load_mode }}'
+{%- if job.dataflow.sink.properties.enable_delete == "true" %},
+    'sink.enable-delete' = 'true'
+{%- endif %}
+); 

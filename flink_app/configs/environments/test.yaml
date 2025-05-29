@@ -1,0 +1,71 @@
+# 测试环境配置
+# ================
+# 测试环境相关的配置参数
+
+# 全局环境设置
+environment: "test"
+cluster:
+  name: "flink-test-cluster"
+  parallelism: 4
+  taskmanager:
+    memory: "2g"
+    slots: 2
+
+# 检查点配置
+checkpoint:
+  interval: "120s"
+  mode: "EXACTLY_ONCE"
+  timeout: "600s"
+  base_dir: "./flink_app"
+
+# 重启策略
+restart:
+  strategy: "fixed-delay"
+  attempts: 2
+  delay: "60s"
+
+# 数据源配置
+sources:
+  mysql:
+    host: "xme-envtest-rds.chkycqw22fzd.ap-southeast-1.rds.amazonaws.com"
+    port: 3306
+    username: "bigdata-user-interests"
+    password: "BId.3DKRF5dDFwfs"
+    databases:
+      content: "content_data_test"
+      behavior: "content_behavior"
+    server_id_range: "6001-6999"
+    
+  kafka:
+    brokers:
+      - "b-1.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+      - "b-2.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+      - "b-3.xmeprodlog.o53475.c3.kafka.ap-southeast-1.amazonaws.com:9092"
+    consumer:
+      auto_offset_reset: "latest"
+
+# 数据目标配置
+sinks:
+  doris:
+    fenodes: "10.10.41.243:8030"
+    username: "root"
+    password: "doris@123"
+    databases:
+      ods: "test_flink"
+      dw: "test_dw"
+    load_properties:
+      batch_size: "500"
+      batch_interval: "10s"
+      max_retries: "2"
+
+# 监控配置
+monitoring:
+  webhook_url: "https://open.larksuite.com/open-apis/bot/v2/hook/3bb8fac6-6a02-498e-804f-48b1b38a6089"
+  check_interval: 120
+  max_failures: 2
+  
+# 网络和安全配置
+network:
+  connection_timeout: "30s"
+  read_timeout: "60s"
+  ssl_enabled: false 

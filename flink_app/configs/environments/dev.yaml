@@ -1,0 +1,75 @@
+# 开发环境配置
+# ================
+# 开发环境相关的配置参数
+
+# 全局环境设置
+environment: "dev"
+cluster:
+  name: "flink-dev-cluster"
+  parallelism: 2
+  taskmanager:
+    memory: "1g"
+    slots: 1
+
+# 检查点配置
+checkpoint:
+  interval: "300s"
+  mode: "EXACTLY_ONCE"
+  timeout: "600s"
+  base_dir: "./flink_app"
+
+# 重启策略
+restart:
+  strategy: "fixed-delay"
+  attempts: 1
+  delay: "120s"
+
+# 数据源配置
+sources:
+  mysql:
+    host: "localhost"
+    port: 3306
+    username: "flink_user"
+    password: "flink_pass"
+    databases:
+      content: "flink_dev"
+      behavior: "flink_dev"
+    server_id_range: "7001-7999"
+    
+  kafka:
+    brokers:
+      - "localhost:9092"
+    consumer:
+      auto_offset_reset: "earliest"
+
+# 数据目标配置
+sinks:
+  doris:
+    fenodes: "localhost:8030"
+    username: "root"
+    password: "root"
+    databases:
+      ods: "dev_ods"
+      dw: "dev_dw"
+    load_properties:
+      batch_size: "100"
+      batch_interval: "30s"
+      max_retries: "1"
+
+# 监控配置
+monitoring:
+  webhook_url: "https://open.larksuite.com/open-apis/bot/v2/hook/3bb8fac6-6a02-498e-804f-48b1b38a6089"
+  check_interval: 300
+  max_failures: 1
+  
+# 网络和安全配置
+network:
+  connection_timeout: "10s"
+  read_timeout: "30s"
+  ssl_enabled: false
+
+# 调试配置
+debug:
+  sql_client_result_mode: "TABLEAU"  # 开发环境可以启用表格模式
+  log_level: "DEBUG"
+  enable_web_ui: true 

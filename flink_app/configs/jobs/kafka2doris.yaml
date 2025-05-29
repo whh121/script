@@ -1,0 +1,97 @@
+# Kafka2Doris 作业定义
+# ====================
+# 定义Kafka到Doris的数据流逻辑
+
+# 作业基本信息
+job:
+  name: "kafka2doris"
+  type: "stream"
+  description: "Kafka实时流数据同步到Doris数据仓库"
+  
+# 数据流定义
+dataflow:
+  # 数据源定义
+  source:
+    type: "kafka"
+    topic: "{{ source_topic }}"
+    
+    # 消费配置
+    consumer:
+      group_id: "{{ consumer_group }}"
+      startup_mode: "{{ startup_mode | default('earliest-offset') }}"
+      
+    # 数据格式
+    format:
+      type: "json"
+      ignore_parse_errors: true
+      timestamp_format: "ISO-8601"
+      fail_on_missing_field: false
+      
+    # 水印配置 (事件时间处理)
+    watermark:
+      strategy: "bounded_out_of_orderness"
+      max_out_of_orderness: "5s"
+      timestamp_column: "{{ timestamp_field | default('timestamp') }}"
+  
+  # 数据转换 (可选)
+  transform:
+    # 字段映射
+    field_mapping:
+      # 示例: kafka_field -> doris_field
+      # ts -> event_time
+    
+    # 数据过滤 (可选)
+    filter: 
+      # 示例: uid IS NOT NULL
+    
+    # 数据清洗 (可选)
+    clean:
+      # 示例: COALESCE(user_ip, '0.0.0.0')
+    
+    # 窗口聚合 (可选)
+    window:
+      # 示例: TUMBLE(proc_time, INTERVAL '5' MINUTE)
+  
+  # 数据目标定义  
+  sink:
+    type: "doris"
+    database: "{{ target_database }}"
+    table: "{{ target_table }}"
+    
+    # Doris表模型
+    table_model: "DUPLICATE"  # DUPLICATE适合日志类数据
+    
+    # 写入配置
+    load:
+      format: "json"
+      mode: "stream_load"
+
+# 表结构配置
+schema:
+  # 源数据Schema (JSON格式)
+  source_fields: []  # 动态填充
+  
+  # 目标表Schema
+  target_fields: []  # 动态填充
+  
+  # 字段类型映射
+  type_mapping:
+    json_to_flink:
+      number: "BIGINT"
+      string: "STRING"
+      boolean: "BOOLEAN"
+      object: "STRING"  # JSON对象转为字符串
+      array: "STRING"   # JSON数组转为字符串
+
+# 作业模板引用
+templates:
+  source_sql: "kafka_source.sql.jinja2"
+  sink_sql: "doris_sink.sql.jinja2"
+  complete_sql: "kafka2doris_complete.sql.jinja2"
+
+# 默认参数
+defaults:
+  startup_mode: "earliest-offset"
+  parallelism: 6
+  consumer_group: "flink_kafka2doris_{{ source_topic }}"
+  timestamp_field: "timestamp" 

@@ -1,0 +1,27 @@
+{# Kafka源表SQL模板 #}
+{# =================== #}
+-- Kafka源表定义
+-- Topic: {{ source_topic }}
+-- Consumer Group: {{ consumer_group }}
+
+CREATE TABLE {{ source_table_name }} (
+{%- for field in schema.source_fields %}
+    {{ field.name }} {{ field.flink_type }}
+    {%- if field.comment %} COMMENT '{{ field.comment }}'{% endif %}
+    {%- if not loop.last %},{% endif %}
+{%- endfor %}
+{%- if job.dataflow.source.watermark.timestamp_column %},
+    {{ job.dataflow.source.watermark.timestamp_column }}_ltz AS TO_TIMESTAMP_LTZ({{ job.dataflow.source.watermark.timestamp_column }}, 3),
+    WATERMARK FOR {{ job.dataflow.source.watermark.timestamp_column }}_ltz AS {{ job.dataflow.source.watermark.timestamp_column }}_ltz - INTERVAL '{{ job.dataflow.source.watermark.max_out_of_orderness }}' SECOND
+{%- endif %}
+) WITH (
+    'connector' = 'kafka',
+    'topic' = '{{ source_topic }}',
+    'properties.bootstrap.servers' = '{{ env.sources.kafka.brokers | join(",") }}',
+    'properties.group.id' = '{{ consumer_group }}',
+    'scan.startup.mode' = '{{ job.dataflow.source.consumer.startup_mode }}',
+    'format' = '{{ job.dataflow.source.format.type }}',
+    'json.ignore-parse-errors' = '{{ job.dataflow.source.format.ignore_parse_errors | lower }}',
+    'json.timestamp-format.standard' = '{{ job.dataflow.source.format.timestamp_format }}',
+    'json.fail-on-missing-field' = '{{ job.dataflow.source.format.fail_on_missing_field | lower }}'
+); 

@@ -1,0 +1,74 @@
+# MySQL到Doris CDC作业定义
+# ============================
+# 只包含作业逻辑，不包含环境配置
+
+# 作业基本信息
+job_name: "mysql2doris_{{source_table}}_{{environment}}"
+description: "MySQL CDC同步{{source_table}}表到Doris"
+
+# 数据流定义
+dataflow:
+  type: "cdc_stream"
+  
+  source:
+    type: "mysql_cdc"
+    cdc:
+      startup_mode: "initial"  # initial, earliest-offset, latest-offset, specific-offset, timestamp
+      debezium:
+        snapshot_mode: "initial"  # never, initial, when_needed, schema_only, schema_only_recovery
+        snapshot_locking_mode: "minimal"  # minimal, extended, none
+        decimal_handling_mode: "string"  # precise, double, string
+        bigint_unsigned_handling_mode: "long"  # long, precise
+        include_schema_changes: false
+        tombstones_on_delete: false
+        
+  sink:
+    type: "doris"
+    properties:
+      format: "json"
+      read_json_by_line: "true"
+      load_mode: "stream_load"
+      enable_delete: "true"
+
+# 性能配置
+performance:
+  sink:
+    not_null_enforcer: "drop"
+    upsert_materialize: "none"
+  
+  network:
+    akka_ask_timeout: "30s"
+    web_timeout: "60s"
+
+# 表结构配置
+schema:
+  # 源表Schema (从schema_detector获取)
+  source_fields: []  # 动态填充
+  
+  # 目标表Schema
+  target_fields: []  # 动态填充
+  
+  # 字段类型映射
+  type_mapping:
+    mysql_to_flink:
+      bigint: "BIGINT"
+      int: "INT"
+      varchar: "STRING"
+      text: "STRING"
+      datetime: "TIMESTAMP(3)"
+      timestamp: "TIMESTAMP(3)"
+      decimal: "DECIMAL(10,2)"
+      json: "STRING"
+
+# 作业模板引用
+templates:
+  source_sql: "mysql_cdc_source.sql.jinja2"
+  sink_sql: "doris_sink.sql.jinja2"
+  complete_sql: "mysql2doris_complete.sql.jinja2"
+
+# 默认参数
+defaults:
+  startup_mode: "initial"
+  snapshot_mode: "initial"
+  snapshot_locking_mode: "minimal"
+  parallelism: 4 

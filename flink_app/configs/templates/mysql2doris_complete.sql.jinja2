@@ -1,0 +1,65 @@
+{# MySQL2Doris完整作业SQL模板 #}
+{# ============================== #}
+-- =====================================================
+-- Flink作业: {{ job_name }}
+-- 生成时间: {{ current_time }}
+-- 环境: {{ env.environment }}
+-- 源表: {{ env.sources.mysql.databases[source_database] }}.{{ source_table }}
+-- 目标表: {{ env.sinks.doris.databases[target_database] }}.{{ target_table }}
+-- =====================================================
+
+{%- if env.debug and env.debug.sql_client_result_mode %}
+-- 调试模式设置
+SET sql-client.execution.result-mode={{ env.debug.sql_client_result_mode }};
+{%- endif %}
+
+-- Flink执行配置
+SET 'parallelism.default' = '{{ env.cluster.parallelism }}';
+
+-- 检查点配置
+SET 'execution.checkpointing.interval' = '{{ env.checkpoint.interval }}';
+SET 'execution.checkpointing.mode' = '{{ env.checkpoint.mode }}';
+SET 'execution.checkpointing.timeout' = '{{ env.checkpoint.timeout }}';
+SET 'state.backend' = 'filesystem';
+SET 'state.checkpoints.dir' = 'file://{{ env.checkpoint.base_dir }}/{{ job_type }}/checkpoints';
+
+-- 重启策略配置
+SET 'restart-strategy' = '{{ env.restart.strategy }}';
+SET 'restart-strategy.fixed-delay.attempts' = '{{ env.restart.attempts }}';
+SET 'restart-strategy.fixed-delay.delay' = '{{ env.restart.delay }}';
+
+-- 性能优化配置
+{%- if job.performance %}
+SET 'table.exec.sink.not-null-enforcer' = '{{ job.performance.sink.not_null_enforcer }}';
+SET 'table.exec.sink.upsert-materialize' = '{{ job.performance.sink.upsert_materialize }}';
+
+-- 网络配置
+SET 'akka.ask.timeout' = '{{ job.performance.network.akka_ask_timeout }}';
+SET 'web.timeout' = '{{ job.performance.network.web_timeout }}';
+{%- else %}
+SET 'table.exec.sink.not-null-enforcer' = 'drop';
+SET 'table.exec.sink.upsert-materialize' = 'none';
+
+-- 网络配置
+SET 'akka.ask.timeout' = '{{ env.network.connection_timeout }}';
+SET 'web.timeout' = '{{ env.network.read_timeout }}';
+{%- endif %}
+
+{% include 'mysql_cdc_source.sql.jinja2' %}
+
+{% include 'doris_sink.sql.jinja2' %}
+
+-- 数据同步INSERT语句
+INSERT INTO {{ target_table_name }}
+SELECT 
+{%- for field in schema.source_fields %}
+    {{ field.name }},
+{%- endfor %}
+    DATE_FORMAT(created_at, 'yyyy-MM-dd') AS partition_day
+FROM {{ source_table_name }};
+
+-- 作业监控信息
+-- 作业名称: {{ job_name }}
+-- 检查点目录: {{ env.checkpoint.base_dir }}/{{ job_type }}/checkpoints
+-- 监控地址: http://localhost:8081
+-- 告警webhook: {{ env.monitoring.webhook_url }} 
