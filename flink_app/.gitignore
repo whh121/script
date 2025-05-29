@@ -1,0 +1,169 @@
+# Flink应用工程 - Git忽略文件配置
+# 适配项目独立检查点架构
+
+# ==================== Flink运行时文件 ====================
+# 各项目独立检查点目录 (不提交到Git)
+*/checkpoints/
+*/checkpoints/*
+
+# Flink运行时临时文件
+flink-conf.yaml.backup
+flink-*.log
+*.pid
+
+# ==================== 日志文件 ====================
+# 各项目日志文件
+*/logs/
+*/logs/*
+*.log
+log/
+logs/
+
+# ==================== 输出和临时文件 ====================
+# 各项目输出目录
+*/output/
+*/output/*
+output/
+
+# 临时文件
+*.tmp
+*.temp
+.tmp/
+temp/
+
+# ==================== 系统文件 ====================
+# macOS系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Linux系统文件
+*~
+.directory
+
+# Windows系统文件
+desktop.ini
+
+# ==================== 编辑器和IDE ====================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Eclipse
+.project
+.classpath
+.metadata/
+.settings/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# ==================== 安全敏感文件 ====================
+# 包含密码和密钥的配置文件
+*password*
+*secret*
+*key*
+.env
+.env.local
+.env.production
+
+# 数据库连接配置 (如包含敏感信息)
+# connection.properties
+
+# ==================== 构建和依赖 ====================
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Gradle
+.gradle/
+build/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ==================== 备份和归档 ====================
+# 备份目录
+backup_*/
+old_*/
+*_backup_*/
+*.backup
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ==================== 测试和调试 ====================
+# 测试输出
+test-results/
+test-output/
+coverage/
+
+# 调试文件
+*.debug
+debug/
+
+# ==================== 运维文件 ====================
+# 监控产生的临时文件
+monitor_*.pid
+*.monitor
+
+# Cron任务备份
+crontab.backup
+
+# ==================== 项目特定 ====================
+# Flink savepoints (如果不需要版本控制)
+*/savepoints/
+savepoints/
+
+# 大数据文件
+*.parquet
+*.avro
+*.orc
+
+# ==================== 注意事项 ====================
+# 1. 检查点目录已配置为项目独立，不会在根目录生成
+# 2. 如果需要保留特定配置文件，请在前面加 ! 来排除忽略
+# 3. 例如: !important_config.properties
+
+# 保留重要的项目配置模板
+!*/configs/project.md.template
+!*/configs/connection.properties.template 

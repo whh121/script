@@ -1,0 +1,243 @@
+# Flink应用工程开发规则
+
+## 项目结构规范
+
+### 标准目录结构
+```
+flink_app/
+├── README.md              # 主项目说明
+├── MIGRATION.md           # 迁移文档
+├── .gitignore             # Git忽略配置
+├── .cursorrules           # 开发规则文档
+└── [项目名]/              # 各个Flink应用项目
+    ├── README.md          # 项目说明
+    ├── scripts/           # SQL脚本和Shell脚本
+    ├── configs/           # 配置文件
+    ├── logs/             # 日志文件
+    ├── docs/             # 文档
+    ├── tests/            # 测试文件
+    └── checkpoints/      # 项目独立检查点
+```
+
+### 命名规范
+- **项目目录**: 小写字母+数字，如 `mysql2doris`、`kafka2es`、`hive2clickhouse`
+- **脚本文件**: 下划线分隔，如 `sync_monitor.sh`、`health_check.sh`
+- **配置文件**: `project.md`、`connection.properties`、`flink.conf`
+- **日志文件**: 按日期切割，如 `monitor_YYYYMMDD.log`、`sync_YYYYMMDD.log`
+- **SQL文件**: 描述性命名，如 `final_mysql_to_doris_sync.sql`
+
+## Flink配置规则
+
+### 检查点配置
+- ✅ **项目独立路径**: `SET 'state.checkpoints.dir' = 'file://./flink_app/mysql2doris/checkpoints';`
+- ❌ **避免全局路径**: `SET 'state.checkpoints.dir' = 'file://./flink_app/flink/checkpoints';`
+- ❌ **避免绝对路径**: `SET 'state.checkpoints.dir' = 'file:///absolute/path/checkpoints';`
+- ❌ **避免硬编码路径**: `SET 'state.checkpoints.dir' = 'file:///home/user/checkpoints';`
+
+**原因**: 项目独立管理便于隔离和维护，绝对路径会导致迁移困难，硬编码路径缺乏灵活性
+
+### 标准Flink配置模板
+```sql
+-- 基础配置
+SET 'sql-client.execution.result-mode'='TABLEAU';
+
+-- 检查点配置 (项目独立)
+SET 'execution.checkpointing.interval' = '60s';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+SET 'execution.checkpointing.timeout' = '600s';
+SET 'state.backend' = 'filesystem';
+SET 'state.checkpoints.dir' = 'file://./flink_app/[项目名]/checkpoints';
+
+-- 重启策略
+SET 'restart-strategy' = 'fixed-delay';
+SET 'restart-strategy.fixed-delay.attempts' = '3';
+SET 'restart-strategy.fixed-delay.delay' = '30s';
+```
+
+### 路径自适应脚本模板
+```bash
+#!/bin/bash
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# 使用相对路径配置
+LOG_DIR="$PROJECT_DIR/logs"
+CONFIG_DIR="$PROJECT_DIR/configs"
+CHECKPOINT_DIR="$PROJECT_DIR/checkpoints"
+DOCS_DIR="$PROJECT_DIR/docs"
+TESTS_DIR="$PROJECT_DIR/tests"
+
+# 确保目录存在
+mkdir -p "$LOG_DIR" "$CONFIG_DIR" "$CHECKPOINT_DIR" "$DOCS_DIR" "$TESTS_DIR"
+```
+
+## 作业管理规则
+
+### 配置更新流程
+1. **停止旧作业**: `flink cancel [job-id]`
+2. **等待作业停止**: `sleep 10`
+3. **验证配置**: 检查SQL语法和路径正确性
+4. **清理旧目录**: 删除可能自动生成的错误目录
+5. **启动新作业**: 使用更新后的配置
+6. **验证运行**: 检查作业状态和日志
+
+### 监控脚本管理
+- 更新监控脚本路径后，**必须重新配置cron任务**
+- 使用项目内的 `./scripts/setup_monitor_cron.sh` 更新定时任务
+- 验证cron任务路径正确：`crontab -l`
+- 测试监控脚本：`./scripts/monitor.sh health`
+
+## 项目重构规则
+
+### 安全重构流程
+1. **创建备份**: `backup_$(date +%Y%m%d_%H%M%S)`
+2. **停止所有服务**: Flink作业、cron任务、监控脚本
+3. **复制文件到新结构**: 保持文件完整性
+4. **批量更新路径**: 使用sed命令批量替换
+5. **测试新结构**: 验证所有功能正常
+6. **更新定时任务**: 重新配置cron
+7. **验证完成**: 运行一段时间确认稳定
+8. **清理备份**: 确认无误后删除备份
+
+### 路径批量更新命令
+```bash
+# 更新SQL文件中的检查点路径
+find flink_app/[项目名] -name "*.sql" -exec sed -i 's|旧路径|新路径|g' {} \;
+
+# 更新Shell脚本中的路径
+find flink_app/[项目名] -name "*.sh" -exec sed -i 's|旧路径|新路径|g' {} \;
+
+# 验证更新结果
+grep -r "checkpoints" flink_app/[项目名]/
+```
+
+## 常见问题解决
+
+### 根目录自动生成flink目录
+**原因**: Flink作业还在使用旧的绝对路径或全局路径配置
+**解决步骤**:
+1. 停止所有Flink作业：`flink list` 然后 `flink cancel [job-id]`
+2. 清空cron任务：`crontab -r`
+3. 查找所有使用旧路径的文件：`grep -r "旧路径" flink_app/`
+4. 批量更新为项目独立路径
+5. 删除自动生成的目录：`rm -rf flink/`
+6. 重新启动作业和监控
+
+### cron任务路径错误
+**原因**: 项目重构后cron任务路径未更新
+**解决步骤**:
+1. 检查当前cron任务：`crontab -l`
+2. 进入新项目目录：`cd flink_app/[项目名]`
+3. 重新配置监控：`./scripts/setup_monitor_cron.sh`
+4. 验证路径正确：`crontab -l`
+
+### 监控脚本路径错误
+**解决**: 在所有脚本中使用动态路径检测
+```bash
+# 标准路径检测模板
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+```
+
+### 检查点丢失或损坏
+**预防**:
+1. 定期备份检查点：`tar -czf checkpoint_backup_$(date +%Y%m%d).tar.gz checkpoints/`
+2. 监控检查点大小变化
+3. 保留多个历史版本
+
+**恢复**:
+1. 停止作业
+2. 恢复备份的检查点
+3. 从最新可用检查点重启作业
+
+## 新项目创建模板
+
+### 1. 目录创建脚本
+```bash
+#!/bin/bash
+PROJECT_NAME=$1
+if [ -z "$PROJECT_NAME" ]; then
+    echo "请提供项目名称: ./create_project.sh [项目名]"
+    exit 1
+fi
+
+cd flink_app
+mkdir -p "$PROJECT_NAME"/{scripts,configs,logs,docs,tests,checkpoints}
+echo "✅ 创建项目目录: $PROJECT_NAME"
+```
+
+### 2. 必需文件清单
+- `README.md` - 项目详细说明
+- `scripts/[主要SQL文件].sql` - 核心同步逻辑
+- `scripts/monitor.sh` - 监控脚本
+- `scripts/setup_monitor_cron.sh` - 定时任务配置
+- `configs/project.md` - 项目配置参数
+- `configs/connection.properties` - 连接配置(可选)
+
+### 3. 配置检查点路径
+```sql
+SET 'state.checkpoints.dir' = 'file://./flink_app/[项目名]/checkpoints';
+```
+
+## 最佳实践
+
+### 开发规范
+1. **结构统一**: 严格遵循标准目录结构
+2. **路径规范**: 始终使用项目独立相对路径
+3. **文档完整**: README、配置说明、故障处理文档
+4. **测试充分**: 提供测试脚本和样例数据
+5. **监控到位**: 配置健康检查和报警机制
+
+### 代码质量
+1. **SQL规范**: 使用注释、格式化、参数化配置
+2. **脚本健壮**: 错误处理、日志记录、路径检测
+3. **配置安全**: 密码独立配置、敏感信息保护
+4. **版本管理**: 重要变更记录、配置版本化
+
+### 运维规范
+1. **定期备份**: 每日备份检查点、配置文件
+2. **空间监控**: 监控日志、检查点磁盘使用
+3. **日志管理**: 按天切割、定期清理、异常报警
+4. **性能优化**: 监控作业性能、调优参数配置
+5. **故障预案**: 快速恢复、回滚机制、联系方式
+
+### 团队协作
+1. **环境统一**: 开发、测试、生产环境配置一致
+2. **变更管控**: 配置变更Review、测试验证、灰度发布
+3. **知识共享**: 文档化操作、经验总结、培训计划
+4. **责任明确**: 项目负责人、运维责任、联系方式
+5. **流程规范**: 发布流程、故障处理、变更申请
+
+## 故障排查手册
+
+### 常用检查命令
+```bash
+# 检查Flink作业状态
+flink list
+
+# 查看项目日志
+tail -f flink_app/[项目名]/logs/monitor_$(date +%Y%m%d).log
+
+# 检查检查点目录
+ls -la flink_app/[项目名]/checkpoints/
+
+# 验证cron任务
+crontab -l
+
+# 检查配置路径
+grep -r "checkpoints" flink_app/[项目名]/
+```
+
+### 应急处理流程
+1. **立即止损**: 停止异常作业
+2. **问题定位**: 查看日志、检查配置
+3. **快速恢复**: 使用备份检查点恢复
+4. **根因分析**: 分析故障原因
+5. **预防改进**: 更新监控、优化配置
+
+## 联系和支持
+- **大数据团队**: 技术支持和问题咨询
+- **运维团队**: 环境问题和资源申请  
+- **项目文档**: 查看各项目README和docs目录
+- **故障报告**: 记录故障详情、处理过程、改进建议 

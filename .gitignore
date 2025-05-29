@@ -1,10 +1,81 @@
-# 日志文件
-*.log
-log/*.log
-log/cron_*.log
-log/monitor_*.log
-log/alert_state.txt
-log/last_success.txt
+# Flink应用工程 - Git忽略文件配置
+
+# ==========================================
+# Flink相关文件
+# ==========================================
+
+# 检查点目录 (每个项目独立管理)
+flink_app/*/checkpoints/
+flink_app/*/checkpoints/*
+
+# Flink日志文件
+flink_app/*/logs/*.log
+flink_app/*/logs/*.out
+flink_app/*/logs/*.err
+
+# Flink临时文件
+flink_app/*/tmp/
+flink_app/*/temp/
+
+# ==========================================
+# 项目日志和运行时文件
+# ==========================================
+
+# 监控日志
+*monitor*.log
+*sync*.log
+mysql_sync.log
+kafka_sync.log
+
+# Python运行时文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ==========================================
+# 配置和敏感信息
+# ==========================================
+
+# 敏感配置文件
+*password*
+*secret*
+*.key
+*.pem
+*.p12
+*.jks
+
+# 环境配置
+.env
+.env.local
+.env.production
+.env.test
+
+# ==========================================
+# 备份和临时文件
+# ==========================================
+
+# 备份目录
+old_structure_backup_*/
+backup_*/
+*_backup/
+*.backup
 
 # 临时文件
 *.tmp
@@ -12,93 +83,133 @@ log/last_success.txt
 *.swp
 *.swo
 *~
-
-# 系统文件
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
-# IDE/编辑器文件
-.vscode/
-.idea/
-*.sublime-*
-
-# 配置文件中的敏感信息
-*.env
-.env
-.env.local
-.env.production
-config.local.*
-secrets.*
-
-# 数据库连接文件
-*.db
-*.sqlite
-*.sqlite3
-
-# Flink相关
-flink/checkpoints/
-flink/output/
-flink/savepoints/
-flink/tmp/
-flink/logs/
-
-# 备份文件
-*.bak
-*.backup
-*.old
-
 # 压缩文件
-*.zip
 *.tar.gz
+*.zip
 *.rar
+*.7z
 
-# 进程ID文件
+# ==========================================
+# IDE和编辑器文件
+# ==========================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# Vim
+*.swp
+*.swo
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ==========================================
+# 系统文件
+# ==========================================
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# ==========================================
+# 特定项目文件
+# ==========================================
+
+# 测试输出
+test_output/
+test_results/
+
+# 文档生成
+docs/_build/
+docs/build/
+
+# 数据文件
+*.csv
+*.json
+*.xml
+*.parquet
+data/
+datasets/
+
+# ==========================================
+# 运行时进程文件
+# ==========================================
+
+# PID文件
 *.pid
 
-# 输出文件
-output/
-results/
-reports/
+# 锁文件
+*.lock
 
-# 缓存文件
-cache/
-.cache/
+# Socket文件
+*.sock
 
-# 编译文件
-*.class
-*.jar
-target/
+# ==========================================
+# 自定义忽略
+# ==========================================
 
-# Node.js (如果有前端组件)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# 旧结构文件 (迁移后可删除)
+final_mysql_to_doris_sync.sql
+mysql_doris_sync_monitor.sh
+restart_with_new_config.sh
+cleanup_old_structure.sh
 
-# Python相关 (如果有Python脚本)
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
+# 开发测试文件
+test_*
+debug_*
+sample_*
+demo_*
 
-# 测试覆盖率
-coverage/
-.nyc_output/
-
-# 性能测试结果
-*.profraw
-*.profdata 
-
-# kafka
-kafka_2.13-3.4.0/
+# 个人配置
+personal_*
+local_*

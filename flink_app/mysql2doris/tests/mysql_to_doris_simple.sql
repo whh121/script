@@ -1,0 +1,84 @@
+SET sql-client.execution.result-mode=TABLEAU;
+
+-- 设置 checkpoint 配置
+SET 'execution.checkpointing.interval' = '60s';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+SET 'execution.checkpointing.timeout' = '600s';
+SET 'state.backend' = 'filesystem';
+SET 'state.checkpoints.dir' = 'file://./flink_app/mysql2doris/checkpoints';
+SET 'restart-strategy' = 'fixed-delay';
+SET 'restart-strategy.fixed-delay.attempts' = '3';
+SET 'restart-strategy.fixed-delay.delay' = '30s';
+
+-- 创建MySQL源表
+CREATE TABLE mysql_source (
+    id BIGINT,
+    uid BIGINT,
+    platformType STRING,
+    userIP STRING,
+    version STRING,
+    deviceId STRING,
+    created_time TIMESTAMP(3),
+    updated_time TIMESTAMP(3),
+    partition_day AS CAST(DATE_FORMAT(created_time, 'yyyy-MM-dd') AS DATE),
+    WATERMARK FOR created_time AS created_time - INTERVAL '5' SECOND
+) WITH (
+    'connector' = 'mysql-cdc',
+    'hostname' = '10.10.33.48',
+    'port' = '3306',
+    'username' = 'root',
+    'password' = 'mysql@123',
+    'database-name' = 'test_flink',
+    'table-name' = 'user_data',  -- 请根据实际表名修改
+    'server-id' = '5400-5404',
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.incremental.snapshot.chunk.size' = '8096',
+    'connect.timeout' = '30s',
+    'connect.max-retries' = '3',
+    'connection.pool.size' = '20',
+    'heartbeat.interval' = '30s'
+);
+
+-- 创建Doris目标表
+CREATE TABLE doris_sink (
+    id BIGINT,
+    partition_day DATE,
+    uid BIGINT,
+    platformType STRING,
+    userIP STRING,
+    version STRING,
+    deviceId STRING,
+    created_time STRING,
+    updated_time STRING
+) WITH (
+    'connector' = 'doris',
+    'fenodes' = '10.10.41.243:9030',
+    'table.identifier' = 'test_flink.user_data_sync',  -- 请根据实际表名修改
+    'username' = 'root',
+    'password' = 'doris@123',
+    'sink.properties.format' = 'json',
+    'sink.properties.strip_outer_array' = 'false',
+    'sink.enable-2pc' = 'true',
+    'sink.buffer-flush.max-rows' = '10000',
+    'sink.buffer-flush.max-bytes' = '10485760',
+    'sink.buffer-flush.interval' = '10s',
+    'sink.max-retries' = '5',
+    'sink.properties.columns' = 'id, partition_day, uid, platformType, userIP, version, deviceId, created_time, updated_time',
+    'sink.label-prefix' = 'mysql_to_doris_sync',
+    'sink.properties.read_timeout' = '3600',
+    'sink.properties.write_timeout' = '3600'
+);
+
+-- 执行数据同步
+INSERT INTO doris_sink
+SELECT
+    id,
+    partition_day,
+    uid,
+    platformType,
+    userIP,
+    version,
+    COALESCE(deviceId, 'unknown') AS deviceId,
+    CAST(created_time AS STRING) AS created_time,
+    CAST(updated_time AS STRING) AS updated_time
+FROM mysql_source; 
