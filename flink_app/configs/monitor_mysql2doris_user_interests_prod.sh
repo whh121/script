@@ -1,6 +1,6 @@
 #!/bin/bash
 # 监控配置 - mysql2doris_user_interests_prod
-# 自动生成于 2025-05-29 07:40:00
+# 自动生成于 2025-05-29 08:03:08
 
 JOB_NAME="mysql2doris_user_interests_prod"
 ENVIRONMENT="prod"
